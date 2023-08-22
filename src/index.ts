@@ -79,7 +79,7 @@ export default class PluginSidebarMemo extends Plugin {
         });
 
         this.logger = createLogger("main");
-        this.eventBus.on("loaded-protyle", (ev) => {console.log(JSON.parse(JSON.stringify(ev.detail.element)));this.refreshEditor();});
+        this.eventBus.on("loaded-protyle", this.refreshEditor.bind(this));
     }
 
     async onLayoutReady() {
@@ -166,7 +166,7 @@ export default class PluginSidebarMemo extends Plugin {
             this.onChange = true;
             const mainNode = (observer as any).mainNode;
             const sidebar = (observer as any).sidebar;
-            await this.waitForDataLoading(mainNode);
+            // await this.waitForDataLoading(mainNode);
             setTimeout(() => { 
                 this.refreshSideBarMemos(mainNode, sidebar);
                 this.onChange = false;
@@ -226,7 +226,6 @@ export default class PluginSidebarMemo extends Plugin {
             });
             const mainNodes = this.editorNode.querySelectorAll("div.protyle-wysiwyg") as NodeListOf<HTMLElement>;
             mainNodes.forEach(mainNode=> {
-                mainNode.style.width = "100%";
                 const sidebar = mainNode.parentElement.querySelector("#protyle-sidebar") as HTMLElement;
                 sidebar?.remove();
             });
@@ -318,11 +317,12 @@ export default class PluginSidebarMemo extends Plugin {
         mainNodes.forEach(mainNode => {
             const mainNodeID = this.getMainNodeID(mainNode);
             if (isDev) this.logger.info("等待数据加载完成...");
-            pList.push(this.waitForDataLoading(mainNode).then(() => {
+            // 仅改变产生变化的观测器
+            if (changeList[mainNodeID]) delete changeList[mainNodeID];
+            const size = Object.assign({}, getComputedStyle(mainNode));
+            const sidebar = this.addSideBar(mainNode);
+            pList.push(this.waitForDataLoading(mainNode, size).then(() => {
                 if (isDev) this.logger.info("数据加载完成");
-                // 仅改变产生变化的观测器
-                if (changeList[mainNodeID]) delete changeList[mainNodeID];
-                const sidebar = this.addSideBar(mainNode);
                 setTimeout(() => { this.refreshSideBarMemos(mainNode, sidebar);}, 0);
                 const observer = new MutationObserver(this.handleMainNode.bind(this));
                 (observer as any).mainNode = mainNode;
@@ -469,13 +469,31 @@ export default class PluginSidebarMemo extends Plugin {
         return targetNode.getBoundingClientRect().y - parentNode.getBoundingClientRect().y;
     }
 
-    private async waitForDataLoading(mainNode: HTMLElement) {
-        const rootNode = mainNode.parentElement.parentElement;
-        let ready = (rootNode.dataset.loading == "finished");
+    private async waitForDataLoading(mainNode: HTMLElement, originSize:{padding: string, width: string}) {
+        // 只有全宽模式要改变宽度，所以只有全宽模式要等待
+        const fullwidth = mainNode.parentElement.dataset.fullwidth;
+        if (isDev) this.logger.info(`检测到${fullwidth ? "是" : "不是" }全宽模式`);
+        if (!fullwidth) return await sleep(100);
+        let i = 0;
+        let ready = (originSize.padding != getComputedStyle(mainNode).padding || originSize.width != getComputedStyle(mainNode).width);
         while (!ready) {
-            ready = (rootNode.dataset.loading == "finished");
+            ready = (originSize.padding != getComputedStyle(mainNode).padding || originSize.width != getComputedStyle(mainNode).width);
+            // console.log("origin", originSize.padding, originSize.width);
+            // console.log("now", getComputedStyle(mainNode).padding, getComputedStyle(mainNode).width);
             await sleep(50);
+            i += 1;
+            if (i == 10) break;
         }
-        await sleep(500);
+        let former = {padding: "", width: ""};
+        ready = (former.padding == getComputedStyle(mainNode).padding && former.width == getComputedStyle(mainNode).width);
+        while (!ready) {
+            former = Object.assign({}, getComputedStyle(mainNode));
+            await sleep(100);
+            ready = (former.padding == getComputedStyle(mainNode).padding && former.width == getComputedStyle(mainNode).width);
+            // console.log("former", former.padding, former.width);
+            // console.log("now", getComputedStyle(mainNode).padding, getComputedStyle(mainNode).width);
+            i += 1;
+            if (i == 20) break;
+        }
     }
 }
