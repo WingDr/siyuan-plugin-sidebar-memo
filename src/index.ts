@@ -5,7 +5,7 @@ import {
     Setting
 } from "siyuan";
 import "./index.scss";
-import { icons, isDev } from "./constants";
+import { isDev } from "./constants";
 import { ILogger, createLogger } from "./simple-logger";
 import { sleep } from "./utils";
 
@@ -36,11 +36,10 @@ export default class PluginSidebarMemo extends Plugin {
     private topBarElement:HTMLElement;
     private editorNode: HTMLElement;
 
+    private refreshEditorBindThis = this.refreshEditor.bind(this);
     private handleMainNode: MutationCallback;
     private handleMemoNode: MutationCallback;
 
-
-    private editorObserver: MutationObserver;
     private mainNodeObservers: {[mainNodeID: string]: MutationObserver};
     private memoObservers: {[mainNodeID: string]: MutationObserver[]};
 
@@ -51,8 +50,6 @@ export default class PluginSidebarMemo extends Plugin {
 
         const frontEnd = getFrontend();
         this.isMobile = frontEnd === "mobile" || frontEnd === "browser-mobile";
-        // 图标的制作参见帮助文档
-        // this.addIcons(icons);
 
         this.topBarElement = this.addTopBar({
             icon: "iconM",
@@ -76,7 +73,6 @@ export default class PluginSidebarMemo extends Plugin {
         });
 
         this.logger = createLogger("main");
-        this.eventBus.on("loaded-protyle", this.refreshEditor.bind(this));
     }
 
     async onLayoutReady() {
@@ -203,9 +199,10 @@ export default class PluginSidebarMemo extends Plugin {
         if (open) {
             this.memoObservers = {};
             this.mainNodeObservers = {};
+            this.eventBus.on("loaded-protyle", this.refreshEditorBindThis);
             this.refreshEditor();
         } else {
-            this.editorObserver?.disconnect();
+            this.eventBus.off("loaded-protyle", this.refreshEditorBindThis);
             Object.keys(this.mainNodeObservers).forEach(id => {
                 this.mainNodeObservers[id].disconnect();
             });

@@ -42,6 +42,8 @@
 		border-radius:var(--sidebar-memo-number-border-radius);
 		text-align:center;
 		margin-right:var(--sidebar-memo-number-margin-right);
+		font-family: 'Arial';
+		line-height: var(--sidebar-memo-number-height);
 		color:var(--sidebar-memo-number-color);
 		background-color:var(--sidebar-memo-number-background-color);
 		overflow: hidden;

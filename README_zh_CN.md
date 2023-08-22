@@ -24,12 +24,15 @@
 	--sidebar-memo-number-not-only-child-color:var(--b3-theme-background);
 	--sidebar-memo-editor-padding-right: 250px;
 	--sidebar-memo-sidebar-right: -80px;
-	--sidebar-memo-disapear-screen-width: 1280px;
 	--sidebar-memo-text-max-width: 150px;
 }
 ```
 
 其中，
 ```CSS
---sidebar-memo-number*当同一个块中有多个备注时，每个
+--sidebar-memo-number-* ：当同一个块中有多个备注时，每个备注的块内编号的样式。
+--sidebar-memo-number-not-only-child-* ：当一个块中只有一个备注时编号的样式。
+--sidebar-memo-text-* ：侧边备注的文本样式
+--sidebar-memo-editor-* ：思源编辑器打开“自适应宽度”后，展开侧边备注时的编辑器样式
+--sidebar-memo-sidebar-* ：思源编辑器打开“自适应宽度”后，侧边备注的样式
 ```

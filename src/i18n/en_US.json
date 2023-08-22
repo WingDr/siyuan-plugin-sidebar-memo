@@ -10,5 +10,5 @@
   "confirmRemove": "Confirm to delete the data in ${name}?",
   "insertEmoji": "Insert Emoji",
   "name": "Sidebar Memos",
-  "switchSidebarMemo": "Toggle the sidebar display of memos"
+  "switchSidebarMemo": "Toggle Sidebar Memos Display"
 }
