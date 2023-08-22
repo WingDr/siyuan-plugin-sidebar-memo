@@ -35,15 +35,12 @@ export default class PluginSidebarMemo extends Plugin {
 
     private topBarElement:HTMLElement;
     private editorNode: HTMLElement;
-    private editorMemoNodes: NodeListOf<Element>[];
 
-    private handleEditorNode: MutationCallback;
     private handleMainNode: MutationCallback;
     private handleMemoNode: MutationCallback;
 
 
     private editorObserver: MutationObserver;
-    private mainNodeChangeObservers: {[mainNodeID: string]: MutationObserver};
     private mainNodeObservers: {[mainNodeID: string]: MutationObserver};
     private memoObservers: {[mainNodeID: string]: MutationObserver[]};
 
@@ -58,8 +55,8 @@ export default class PluginSidebarMemo extends Plugin {
         // this.addIcons(icons);
 
         this.topBarElement = this.addTopBar({
-            icon: "iconFace",
-            title: "侧栏备注",
+            icon: "iconM",
+            title: this.i18n.name,
             position: "right",
             callback: () => {
                 if (this.isMobile) {
@@ -85,9 +82,7 @@ export default class PluginSidebarMemo extends Plugin {
     async onLayoutReady() {
         await this.loadData(STORAGE_NAME);
         this.editorNode = document.querySelector("div.layout__center");
-        this.editorMemoNodes = [];
         this.memoObservers = {};
-        this.mainNodeChangeObservers = {};
         this.mainNodeObservers = {};
         this.onChange = false;
         this.alignCenter = true;
@@ -137,7 +132,7 @@ export default class PluginSidebarMemo extends Plugin {
         if (!this.isMobile) {
             menu.addItem({
                 icon: "iconLayoutBottom",
-                label: "打开侧栏备注",
+                label: this.i18n.switchSidebarMemo,
                 click: () => {
                     this.openSideBar(!this.data[STORAGE_NAME].openSideBarMemo);
                 }
@@ -155,10 +150,6 @@ export default class PluginSidebarMemo extends Plugin {
     }
 
     private initHandleFunctions() {
-        this.handleEditorNode = () => { 
-            if (isDev) this.logger.info("Editor Observer Callback");
-            // this.refreshEditor(); 
-        };
         this.handleMainNode = async (mutationsList, observer) => { 
           for (const mutation of mutationsList) {
             if (isDev) this.logger.info("Main Node Observer Callback, detail=>", {mutation, observer});
@@ -210,8 +201,6 @@ export default class PluginSidebarMemo extends Plugin {
     private openSideBar(open: boolean, save=true) {
         if (isDev) this.logger.info("open sidebar 触发, open=>", {open});
         if (open) {
-            // this.editorObserver = new MutationObserver(this.handleEditorNode.bind(this));
-            // this.editorObserver.observe(this.editorNode, {childList: true, attributeFilter:["data-id"]});
             this.memoObservers = {};
             this.mainNodeObservers = {};
             this.refreshEditor();
@@ -219,7 +208,6 @@ export default class PluginSidebarMemo extends Plugin {
             this.editorObserver?.disconnect();
             Object.keys(this.mainNodeObservers).forEach(id => {
                 this.mainNodeObservers[id].disconnect();
-                this.mainNodeChangeObservers[id].disconnect();
             });
             Object.keys(this.memoObservers).forEach(id => {
                 this.memoObservers[id]?.forEach(observer => {observer.disconnect();});
@@ -329,35 +317,18 @@ export default class PluginSidebarMemo extends Plugin {
                 (observer as any).sidebar = sidebar;
                 observer.observe(mainNode, {childList:true, subtree:true});
                 this.mainNodeObservers[mainNodeID] = observer;
-                const changeObserver = new MutationObserver(this.handleEditorNode.bind(this));
-                changeObserver.observe(mainNode, {attributes:true});
-                this.mainNodeChangeObservers[mainNodeID] = changeObserver;
             }));
         });
         await Promise.all(pList);
         // 清除多余的观测器
         Object.keys(changeList).forEach(id => {
             this.mainNodeObservers[id].disconnect();
-            this.mainNodeChangeObservers[id].disconnect();
             this.memoObservers[id].forEach(observer => {
                 observer.disconnect();
             });
             delete this.mainNodeObservers[id];
-            delete this.mainNodeChangeObservers[id];
             delete this.memoObservers[id];
         });
-    }
-
-    private checkElementChanged(mainNodes: NodeListOf<Element>) {
-        let changed = false;
-        mainNodes.forEach((mainNode, idx) => {
-            const memoNodes = mainNode.querySelectorAll("span[data-type*=\"inline-memo\"]");
-            if (!(this.editorMemoNodes.length > idx ) || this.editorMemoNodes[idx] != memoNodes) {
-                changed = true;
-                this.editorMemoNodes[idx] = memoNodes;
-            }
-        });
-        return changed;
     }
 
     private refreshSideBarMemos(mainNode:HTMLElement, sidebar:HTMLElement) {

@@ -1,4 +1,4 @@
-[中文](https://github.com/siyuan-note/plugin-sample/blob/main/README_zh_CN.md)
+[中文](https://github.com/WingDr/siyuan-plugin-sidebar-memo/blob/main/README_zh_CN.md)
 
 # SiYuan plugin sample
 
