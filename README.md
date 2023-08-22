@@ -37,3 +37,9 @@ In the above code:
 --sidebar-memo-editor-* : Editor style when the SiYuan editor is set to "Adaptive Width" and the sidebar memo is expanded.
 --sidebar-memo-sidebar-* : Style of the sidebar memo when the SiYuan editor is set to "Adaptive Width".
 ```
+
+## Acknowledgments
+
+Special thanks to [Roy](https://github.com/royc01) for contributing the default styles.
+
+Thanks to the "SiYuan Note Enthusiast Group" for their ideas, technical support, and debugging assistance.
