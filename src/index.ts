@@ -1,52 +1,64 @@
 import {
     Plugin,
-    showMessage,
-    confirm,
-    Dialog,
     Menu,
-    openTab,
-    adaptHotkey,
     getFrontend,
-    getBackend,
-    IModel,
-    Setting,
-    fetchPost,
-    Protyle
+    Setting
 } from "siyuan";
 import "./index.scss";
+import { icons, isDev } from "./constants";
+import { ILogger, createLogger } from "./simple-logger";
+import { sleep } from "./utils";
 
 const STORAGE_NAME = "menu-config";
-const TAB_TYPE = "custom_tab";
-const DOCK_TYPE = "dock_tab";
 
-export default class PluginSample extends Plugin {
+interface Indexs {
+    [id: string]: {
+        node?: HTMLElement,
+        container?: HTMLElement
+    }
+}
 
-    private customTab: () => IModel;
+export default class PluginSidebarMemo extends Plugin {
+
     private isMobile: boolean;
-    private blockIconEventBindThis = this.blockIconEvent.bind(this);
+    private onChange: boolean;
+    private alignCenter: boolean;
+
+    private logger: ILogger;
+
+    private topBarElement:HTMLElement;
+    private editorNode: HTMLElement;
+    private editorMemoNodes: NodeListOf<Element>[];
+
+    private handleEditorNode: MutationCallback;
+    private handleMainNode: MutationCallback;
+    private handleMemoNode: MutationCallback;
+
+
+    private editorObserver: MutationObserver;
+    private mainNodeChangeObservers: {[mainNodeID: string]: MutationObserver};
+    private mainNodeObservers: {[mainNodeID: string]: MutationObserver};
+    private memoObservers: {[mainNodeID: string]: MutationObserver[]};
 
     onload() {
-        this.data[STORAGE_NAME] = {readonlyText: "Readonly"};
+        this.data[STORAGE_NAME] = {
+            openSideBarMemo: false
+        };
 
         const frontEnd = getFrontend();
         this.isMobile = frontEnd === "mobile" || frontEnd === "browser-mobile";
         // 图标的制作参见帮助文档
-        this.addIcons(`<symbol id="iconFace" viewBox="0 0 32 32">
-<path d="M13.667 17.333c0 0.92-0.747 1.667-1.667 1.667s-1.667-0.747-1.667-1.667 0.747-1.667 1.667-1.667 1.667 0.747 1.667 1.667zM20 15.667c-0.92 0-1.667 0.747-1.667 1.667s0.747 1.667 1.667 1.667 1.667-0.747 1.667-1.667-0.747-1.667-1.667-1.667zM29.333 16c0 7.36-5.973 13.333-13.333 13.333s-13.333-5.973-13.333-13.333 5.973-13.333 13.333-13.333 13.333 5.973 13.333 13.333zM14.213 5.493c1.867 3.093 5.253 5.173 9.12 5.173 0.613 0 1.213-0.067 1.787-0.16-1.867-3.093-5.253-5.173-9.12-5.173-0.613 0-1.213 0.067-1.787 0.16zM5.893 12.627c2.28-1.293 4.040-3.4 4.88-5.92-2.28 1.293-4.040 3.4-4.88 5.92zM26.667 16c0-1.040-0.16-2.040-0.44-2.987-0.933 0.2-1.893 0.32-2.893 0.32-4.173 0-7.893-1.92-10.347-4.92-1.4 3.413-4.187 6.093-7.653 7.4 0.013 0.053 0 0.12 0 0.187 0 5.88 4.787 10.667 10.667 10.667s10.667-4.787 10.667-10.667z"></path>
-</symbol>
-<symbol id="iconSaving" viewBox="0 0 32 32">
-<path d="M20 13.333c0-0.733 0.6-1.333 1.333-1.333s1.333 0.6 1.333 1.333c0 0.733-0.6 1.333-1.333 1.333s-1.333-0.6-1.333-1.333zM10.667 12h6.667v-2.667h-6.667v2.667zM29.333 10v9.293l-3.76 1.253-2.24 7.453h-7.333v-2.667h-2.667v2.667h-7.333c0 0-3.333-11.28-3.333-15.333s3.28-7.333 7.333-7.333h6.667c1.213-1.613 3.147-2.667 5.333-2.667 1.107 0 2 0.893 2 2 0 0.28-0.053 0.533-0.16 0.773-0.187 0.453-0.347 0.973-0.427 1.533l3.027 3.027h2.893zM26.667 12.667h-1.333l-4.667-4.667c0-0.867 0.12-1.72 0.347-2.547-1.293 0.333-2.347 1.293-2.787 2.547h-8.227c-2.573 0-4.667 2.093-4.667 4.667 0 2.507 1.627 8.867 2.68 12.667h2.653v-2.667h8v2.667h2.68l2.067-6.867 3.253-1.093v-4.707z"></path>
-</symbol>`);
+        // this.addIcons(icons);
 
-        const topBarElement = this.addTopBar({
+        this.topBarElement = this.addTopBar({
             icon: "iconFace",
-            title: this.i18n.addTopBarIcon,
+            title: "侧栏备注",
             position: "right",
             callback: () => {
                 if (this.isMobile) {
                     this.addMenu();
                 } else {
-                    let rect = topBarElement.getBoundingClientRect();
+                    let rect = this.topBarElement.getBoundingClientRect();
                     // 如果被隐藏，则使用更多按钮
                     if (rect.width === 0) {
                         rect = document.querySelector("#barMore").getBoundingClientRect();
@@ -59,86 +71,32 @@ export default class PluginSample extends Plugin {
             }
         });
 
-        const statusIconTemp = document.createElement("template");
-        statusIconTemp.innerHTML = `<div class="toolbar__item b3-tooltips b3-tooltips__w" aria-label="Remove plugin-sample Data">
-    <svg>
-        <use xlink:href="#iconTrashcan"></use>
-    </svg>
-</div>`;
-        statusIconTemp.content.firstElementChild.addEventListener("click", () => {
-            confirm("⚠️", this.i18n.confirmRemove.replace("${name}", this.name), () => {
-                this.removeData(STORAGE_NAME).then(() => {
-                    this.data[STORAGE_NAME] = {readonlyText: "Readonly"};
-                    showMessage(`[${this.name}]: ${this.i18n.removedData}`);
-                });
-            });
-        });
+        this.logger = createLogger("main");
+        this.eventBus.on("loaded-protyle", this.refreshEditor.bind(this));
+    }
 
-        this.addStatusBar({
-            element: statusIconTemp.content.firstElementChild as HTMLElement,
-        });
+    async onLayoutReady() {
+        await this.loadData(STORAGE_NAME);
+        this.editorNode = document.querySelector("div.layout__center");
+        this.editorMemoNodes = [];
+        this.memoObservers = {};
+        this.mainNodeChangeObservers = {};
+        this.mainNodeObservers = {};
+        this.onChange = false;
+        this.alignCenter = true;
 
-        this.customTab = this.addTab({
-            type: TAB_TYPE,
-            init() {
-                this.element.innerHTML = `<div class="plugin-sample__custom-tab">${this.data.text}</div>`;
-            },
-            beforeDestroy() {
-                console.log("before destroy tab:", TAB_TYPE);
-            },
-            destroy() {
-                console.log("destroy tab:", TAB_TYPE);
-            }
-        });
+        if (isDev) this.logger.info("找到编辑器, editor =>", this.editorNode);
 
-        this.addCommand({
-            langKey: "showDialog",
-            hotkey: "⇧⌘M",
-            callback: () => {
-                this.showDialog();
-            },
-            fileTreeCallback: (file: any) => {
-                console.log(file, "fileTreeCallback");
-            },
-            editorCallback: (protyle: any) => {
-                console.log(protyle, "editorCallback");
-            },
-            dockCallback: (element: HTMLElement) => {
-                console.log(element, "dockCallback");
-            },
-        });
+        this.initHandleFunctions();
+        this.openSideBar(this.data[STORAGE_NAME].openSideBarMemo);
+    }
 
-        this.addDock({
-            config: {
-                position: "LeftBottom",
-                size: {width: 200, height: 0},
-                icon: "iconSaving",
-                title: "Custom Dock",
-            },
-            data: {
-                text: "This is my custom dock"
-            },
-            type: DOCK_TYPE,
-            init() {
-                this.element.innerHTML = `<div class="fn__flex-1 fn__flex-column">
-    <div class="block__icons">
-        <div class="block__logo">
-            <svg><use xlink:href="#iconEmoji"></use></svg>
-            Custom Dock
-        </div>
-        <span class="fn__flex-1 fn__space"></span>
-        <span data-type="min" class="block__icon b3-tooltips b3-tooltips__sw" aria-label="Min ${adaptHotkey("⌘W")}"><svg><use xlink:href="#iconMin"></use></svg></span>
-    </div>
-    <div class="fn__flex-1 plugin-sample__custom-dock">
-        ${this.data.text}
-    </div>
-</div>`;
-            },
-            destroy() {
-                console.log("destroy dock:", DOCK_TYPE);
-            }
-        });
+    onunload() {
+        this.openSideBar(false, false);
+    }
 
+
+    private initSettingTab() {
         const textareaElement = document.createElement("textarea");
         this.setting = new Setting({
             confirmCallback: () => {
@@ -165,426 +123,19 @@ export default class PluginSample extends Plugin {
             description: "Open plugin url in browser",
             actionElement: btnaElement,
         });
-
-        this.protyleSlash = [{
-            filter: ["insert emoji 😊", "插入表情 😊", "crbqwx"],
-            html: `<div class="b3-list-item__first"><span class="b3-list-item__text">${this.i18n.insertEmoji}</span><span class="b3-list-item__meta">😊</span></div>`,
-            id: "insertEmoji",
-            callback(protyle: Protyle) {
-                protyle.insert("😊");
-            }
-        }];
-
-        console.log(this.i18n.helloPlugin);
-    }
-
-    onLayoutReady() {
-        this.loadData(STORAGE_NAME);
-        console.log(`frontend: ${getFrontend()}; backend: ${getBackend()}`);
-    }
-
-    onunload() {
-        console.log(this.i18n.byePlugin);
-    }
-
-    /* 自定义设置
-    openSetting() {
-        const dialog = new Dialog({
-            title: this.name,
-            content: `<div class="b3-dialog__content"><textarea class="b3-text-field fn__block" placeholder="readonly text in the menu"></textarea></div>
-<div class="b3-dialog__action">
-    <button class="b3-button b3-button--cancel">${this.i18n.cancel}</button><div class="fn__space"></div>
-    <button class="b3-button b3-button--text">${this.i18n.save}</button>
-</div>`,
-            width: this.isMobile ? "92vw" : "520px",
-        });
-        const inputElement = dialog.element.querySelector("textarea");
-        inputElement.value = this.data[STORAGE_NAME].readonlyText;
-        const btnsElement = dialog.element.querySelectorAll(".b3-button");
-        dialog.bindInput(inputElement, () => {
-            (btnsElement[1] as HTMLButtonElement).click();
-        });
-        inputElement.focus();
-        btnsElement[0].addEventListener("click", () => {
-            dialog.destroy();
-        });
-        btnsElement[1].addEventListener("click", () => {
-            this.saveData(STORAGE_NAME, {readonlyText: inputElement.value});
-            dialog.destroy();
-        });
-    }
-    */
-
-    private eventBusLog({detail}: any) {
-        console.log(detail);
-    }
-
-    private blockIconEvent({detail}: any) {
-        const ids: string[] = [];
-        detail.blockElements.forEach((item: HTMLElement) => {
-            ids.push(item.getAttribute("data-node-id"));
-        });
-        detail.menu.addItem({
-            iconHTML: "",
-            type: "readonly",
-            label: "IDs<br>" + ids.join("<br>"),
-        });
-    }
-
-    private showDialog() {
-        const dialog = new Dialog({
-            title: "Info",
-            content: `<div class="b3-dialog__content">
-    <div>API demo:</div>
-    <div class="fn__hr"></div>
-    <div class="plugin-sample__time">System current time: <span id="time"></span></div>
-    <div class="fn__hr"></div>
-    <div class="fn__hr"></div>
-    <div>Protyle demo:</div>
-    <div class="fn__hr"></div>
-    <div id="protyle" style="height: 360px;"></div>
-</div>`,
-            width: this.isMobile ? "92vw" : "560px",
-            height: "540px",
-        });
-        new Protyle(this.app, dialog.element.querySelector("#protyle"), {
-            blockId: "20200812220555-lj3enxa",
-        });
-        fetchPost("/api/system/currentTime", {}, (response) => {
-            dialog.element.querySelector("#time").innerHTML = new Date(response.data).toString();
-        });
     }
 
     private addMenu(rect?: DOMRect) {
-        const menu = new Menu("topBarSample", () => {
-            console.log(this.i18n.byeMenu);
-        });
-        menu.addItem({
-            icon: "iconInfo",
-            label: "Dialog(open help first)",
-            accelerator: this.commands[0].customHotkey,
-            click: () => {
-                this.showDialog();
-            }
-        });
+        const menu = new Menu("topBarSample");
         if (!this.isMobile) {
             menu.addItem({
                 icon: "iconLayoutBottom",
-                label: "Open Custom Tab",
+                label: "打开侧栏备注",
                 click: () => {
-                    const tab = openTab({
-                        app: this.app,
-                        custom: {
-                            icon: "iconFace",
-                            title: "Custom Tab",
-                            data: {
-                                text: "This is my custom tab",
-                            },
-                            id: this.name + TAB_TYPE
-                        },
-                    });
-                    console.log(tab);
-                }
-            });
-            menu.addItem({
-                icon: "iconLayoutBottom",
-                label: "Open Asset Tab(open help first)",
-                click: () => {
-                    const tab = openTab({
-                        app: this.app,
-                        asset: {
-                            path: "assets/paragraph-20210512165953-ag1nib4.svg"
-                        }
-                    });
-                    console.log(tab);
-                }
-            });
-            menu.addItem({
-                icon: "iconLayoutBottom",
-                label: "Open Doc Tab(open help first)",
-                click: async () => {
-                    const tab = await openTab({
-                        app: this.app,
-                        doc: {
-                            id: "20200812220555-lj3enxa",
-                        }
-                    });
-                    console.log(tab);
-                }
-            });
-            menu.addItem({
-                icon: "iconLayoutBottom",
-                label: "Open Search Tab",
-                click: () => {
-                    const tab = openTab({
-                        app: this.app,
-                        search: {
-                            k: "SiYuan"
-                        }
-                    });
-                    console.log(tab);
-                }
-            });
-            menu.addItem({
-                icon: "iconLayoutBottom",
-                label: "Open Card Tab",
-                click: () => {
-                    const tab = openTab({
-                        app: this.app,
-                        card: {
-                            type: "all"
-                        }
-                    });
-                    console.log(tab);
-                }
-            });
-            menu.addItem({
-                icon: "iconLayout",
-                label: "Open Float Layer(open help first)",
-                click: () => {
-                    this.addFloatLayer({
-                        ids: ["20210428212840-8rqwn5o", "20201225220955-l154bn4"],
-                        defIds: ["20230415111858-vgohvf3", "20200813131152-0wk5akh"],
-                        x: window.innerWidth - 768 - 120,
-                        y: 32
-                    });
-                }
-            });
-            menu.addItem({
-                label: "Get Opened Custom Tab",
-                click: () => {
-                    console.log(this.getOpenedTab());
+                    this.openSideBar(!this.data[STORAGE_NAME].openSideBarMemo);
                 }
             });
         }
-        menu.addItem({
-            icon: "iconScrollHoriz",
-            label: "Event Bus",
-            type: "submenu",
-            submenu: [{
-                icon: "iconSelect",
-                label: "On ws-main",
-                click: () => {
-                    this.eventBus.on("ws-main", this.eventBusLog);
-                }
-            }, {
-                icon: "iconClose",
-                label: "Off ws-main",
-                click: () => {
-                    this.eventBus.off("ws-main", this.eventBusLog);
-                }
-            }, {
-                icon: "iconSelect",
-                label: "On click-blockicon",
-                click: () => {
-                    this.eventBus.on("click-blockicon", this.blockIconEventBindThis);
-                }
-            }, {
-                icon: "iconClose",
-                label: "Off click-blockicon",
-                click: () => {
-                    this.eventBus.off("click-blockicon", this.blockIconEventBindThis);
-                }
-            }, {
-                icon: "iconSelect",
-                label: "On click-pdf",
-                click: () => {
-                    this.eventBus.on("click-pdf", this.eventBusLog);
-                }
-            }, {
-                icon: "iconClose",
-                label: "Off click-pdf",
-                click: () => {
-                    this.eventBus.off("click-pdf", this.eventBusLog);
-                }
-            }, {
-                icon: "iconSelect",
-                label: "On click-editorcontent",
-                click: () => {
-                    this.eventBus.on("click-editorcontent", this.eventBusLog);
-                }
-            }, {
-                icon: "iconClose",
-                label: "Off click-editorcontent",
-                click: () => {
-                    this.eventBus.off("click-editorcontent", this.eventBusLog);
-                }
-            }, {
-                icon: "iconSelect",
-                label: "On click-editortitleicon",
-                click: () => {
-                    this.eventBus.on("click-editortitleicon", this.eventBusLog);
-                }
-            }, {
-                icon: "iconClose",
-                label: "Off click-editortitleicon",
-                click: () => {
-                    this.eventBus.off("click-editortitleicon", this.eventBusLog);
-                }
-            }, {
-                icon: "iconSelect",
-                label: "On open-noneditableblock",
-                click: () => {
-                    this.eventBus.on("open-noneditableblock", this.eventBusLog);
-                }
-            }, {
-                icon: "iconClose",
-                label: "Off open-noneditableblock",
-                click: () => {
-                    this.eventBus.off("open-noneditableblock", this.eventBusLog);
-                }
-            }, {
-                icon: "iconSelect",
-                label: "On loaded-protyle",
-                click: () => {
-                    this.eventBus.on("loaded-protyle", this.eventBusLog);
-                }
-            }, {
-                icon: "iconClose",
-                label: "Off loaded-protyle",
-                click: () => {
-                    this.eventBus.off("loaded-protyle", this.eventBusLog);
-                }
-            }, {
-                icon: "iconSelect",
-                label: "On open-menu-blockref",
-                click: () => {
-                    this.eventBus.on("open-menu-blockref", this.eventBusLog);
-                }
-            }, {
-                icon: "iconClose",
-                label: "Off open-menu-blockref",
-                click: () => {
-                    this.eventBus.off("open-menu-blockref", this.eventBusLog);
-                }
-            }, {
-                icon: "iconSelect",
-                label: "On open-menu-fileannotationref",
-                click: () => {
-                    this.eventBus.on("open-menu-fileannotationref", this.eventBusLog);
-                }
-            }, {
-                icon: "iconClose",
-                label: "Off open-menu-fileannotationref",
-                click: () => {
-                    this.eventBus.off("open-menu-fileannotationref", this.eventBusLog);
-                }
-            }, {
-                icon: "iconSelect",
-                label: "On open-menu-tag",
-                click: () => {
-                    this.eventBus.on("open-menu-tag", this.eventBusLog);
-                }
-            }, {
-                icon: "iconClose",
-                label: "Off open-menu-tag",
-                click: () => {
-                    this.eventBus.off("open-menu-tag", this.eventBusLog);
-                }
-            }, {
-                icon: "iconSelect",
-                label: "On open-menu-link",
-                click: () => {
-                    this.eventBus.on("open-menu-link", this.eventBusLog);
-                }
-            }, {
-                icon: "iconClose",
-                label: "Off open-menu-link",
-                click: () => {
-                    this.eventBus.off("open-menu-link", this.eventBusLog);
-                }
-            }, {
-                icon: "iconSelect",
-                label: "On open-menu-image",
-                click: () => {
-                    this.eventBus.on("open-menu-image", this.eventBusLog);
-                }
-            }, {
-                icon: "iconClose",
-                label: "Off open-menu-image",
-                click: () => {
-                    this.eventBus.off("open-menu-image", this.eventBusLog);
-                }
-            }, {
-                icon: "iconSelect",
-                label: "On open-menu-av",
-                click: () => {
-                    this.eventBus.on("open-menu-av", this.eventBusLog);
-                }
-            }, {
-                icon: "iconClose",
-                label: "Off open-menu-av",
-                click: () => {
-                    this.eventBus.off("open-menu-av", this.eventBusLog);
-                }
-            }, {
-                icon: "iconSelect",
-                label: "On open-menu-content",
-                click: () => {
-                    this.eventBus.on("open-menu-content", this.eventBusLog);
-                }
-            }, {
-                icon: "iconClose",
-                label: "Off open-menu-content",
-                click: () => {
-                    this.eventBus.off("open-menu-content", this.eventBusLog);
-                }
-            }, {
-                icon: "iconSelect",
-                label: "On open-menu-breadcrumbmore",
-                click: () => {
-                    this.eventBus.on("open-menu-breadcrumbmore", this.eventBusLog);
-                }
-            }, {
-                icon: "iconClose",
-                label: "Off open-menu-breadcrumbmore",
-                click: () => {
-                    this.eventBus.off("open-menu-breadcrumbmore", this.eventBusLog);
-                }
-            }, {
-                icon: "iconSelect",
-                label: "On input-search",
-                click: () => {
-                    this.eventBus.on("input-search", this.eventBusLog);
-                }
-            }, {
-                icon: "iconClose",
-                label: "Off input-search",
-                click: () => {
-                    this.eventBus.off("input-search", this.eventBusLog);
-                }
-            }, {
-                icon: "iconSelect",
-                label: "On open-siyuan-url-plugin",
-                click: () => {
-                    this.eventBus.on("open-siyuan-url-plugin", this.eventBusLog);
-                }
-            }, {
-                icon: "iconClose",
-                label: "Off open-siyuan-url-plugin",
-                click: () => {
-                    this.eventBus.off("open-siyuan-url-plugin", this.eventBusLog);
-                }
-            }, {
-                icon: "iconSelect",
-                label: "On open-siyuan-url-block",
-                click: () => {
-                    this.eventBus.on("open-siyuan-url-block", this.eventBusLog);
-                }
-            }, {
-                icon: "iconClose",
-                label: "Off open-siyuan-url-block",
-                click: () => {
-                    this.eventBus.off("open-siyuan-url-block", this.eventBusLog);
-                }
-            }]
-        });
-        menu.addSeparator();
-        menu.addItem({
-            icon: "iconSparkles",
-            label: this.data[STORAGE_NAME].readonlyText || "Readonly",
-            type: "readonly",
-        });
         if (this.isMobile) {
             menu.fullscreen();
         } else {
@@ -594,5 +145,290 @@ export default class PluginSample extends Plugin {
                 isLeft: true,
             });
         }
+    }
+
+    private initHandleFunctions() {
+        this.handleEditorNode = () => { 
+            if (isDev) this.logger.info("Editor Observer Callback");
+            // this.refreshEditor(); 
+        };
+        this.handleMainNode = async (mutationsList, observer) => { 
+          for (const mutation of mutationsList) {
+            if (isDev) this.logger.info("Main Node Observer Callback, detail=>", {mutation, observer});
+            if (this.onChange) return;
+            this.onChange = true;
+            const mainNode = (observer as any).mainNode;
+            const sidebar = (observer as any).sidebar;
+            await this.waitForDataLoading(mainNode);
+            setTimeout(() => { 
+                this.refreshSideBarMemos(mainNode, sidebar);
+                this.onChange = false;
+            }, 0);
+          }
+        };
+        this.handleMemoNode = (mutationsList, observer) => {
+            for (const mutation of mutationsList) {
+                if (mutation.type === "attributes") {
+                    if (isDev) this.logger.info("Memo Observer Callback, detail=>", {mutation, observer});
+                    const memo = mutation.target as HTMLElement;
+                    const memoContent = memo.getAttribute("data-inline-memo-content");
+                    const block = this.getBlockNode(memo);
+                    const node_id = block.getAttribute("data-node-id");
+                    const memoNodes = block.querySelectorAll("span[data-type*=\"inline-memo\"]");
+                    const sidebar = (observer as unknown as {sidebar:HTMLElement}).sidebar;
+                    let idx = 0;
+                    for (let i = 0; i < memoNodes.length; ++i) {
+                        const item = memoNodes[i];
+                        if (item == memo) idx = i;
+                    }
+                    const sidebarBlock = sidebar.querySelector(`div[id="protyle-sidebar-memo-${node_id}-${idx}"]`);
+                    const sidebarMemo = sidebarBlock.querySelector("div[data-content-type=\"memo\"]") as HTMLElement;
+                    sidebarMemo.innerText = `${memoContent}`;
+                }
+            }
+        };
+    }
+
+    private openSideBar(open: boolean, save=true) {
+        if (isDev) this.logger.info("open sidebar 触发, open=>", {open});
+        if (open) {
+            // this.editorObserver = new MutationObserver(this.handleEditorNode.bind(this));
+            // this.editorObserver.observe(this.editorNode, {childList: true, attributeFilter:["data-id"]});
+            this.memoObservers = {};
+            this.mainNodeObservers = {};
+            this.refreshEditor();
+        } else {
+            this.editorObserver?.disconnect();
+            Object.keys(this.mainNodeObservers).forEach(id => {
+                this.mainNodeObservers[id].disconnect();
+                this.mainNodeChangeObservers[id].disconnect();
+            });
+            Object.keys(this.memoObservers).forEach(id => {
+                this.memoObservers[id]?.forEach(observer => {observer.disconnect();});
+            });
+            const mainNodes = this.editorNode.querySelectorAll("div.protyle-wysiwyg") as NodeListOf<HTMLElement>;
+            mainNodes.forEach(mainNode=> {
+                mainNode.style.width = "100%";
+                const sidebar = mainNode.parentElement.querySelector("#protyle-sidebar") as HTMLElement;
+                sidebar?.remove();
+            });
+        }
+        if (save) {
+            const setting = {
+                openSideBarMemo: open
+            };
+            this.data[STORAGE_NAME] = setting;
+            this.saveData(STORAGE_NAME, setting);
+        }
+    }
+
+    private addSideBar(mainNode: HTMLElement) {
+        let sidebar = mainNode.parentElement.querySelector("#protyle-sidebar") as HTMLElement;
+        const titleNode = mainNode.parentElement.querySelector("div.protyle-title");
+        if (!sidebar) {
+            sidebar = document.createElement("div");
+            sidebar.scrollTop = mainNode.scrollTop;
+            sidebar.id = "protyle-sidebar";
+            titleNode.insertAdjacentElement("beforeend", sidebar);
+            sidebar.style.cssText = "position:absolute;right:-230px;width:230px";
+            sidebar.scrollTop = titleNode.scrollTop;
+            mainNode.style.minWidth = "90%";
+        }
+        return sidebar;
+    }
+
+    private adjustAlign(nowIdx:number, teamIdxs:number[], totalNodes:HTMLCollectionOf<HTMLElement>, mainNode:HTMLElement): null {
+        // 递归结束
+        if (nowIdx < 0) return null;
+        let distance = 0;
+        const firstNodeOffset = totalNodes[teamIdxs[0]].offsetTop;
+        const firstNodeHeisht = totalNodes[teamIdxs[0]].scrollHeight;
+        const lastNodeOffset = totalNodes[teamIdxs[teamIdxs.length - 1]].offsetTop;
+        const lastNodeHeight = totalNodes[teamIdxs[teamIdxs.length - 1]].scrollHeight;
+
+        // 可以容许的最大移动路径
+        if (teamIdxs[0]) distance = firstNodeOffset - totalNodes[teamIdxs[0]-1].offsetTop;
+        else distance = firstNodeOffset;
+        if (isDev) this.logger.info("节点初始计算, detail=>", {nowIdx, teamIdxs, firstNodeOffset, firstNodeHeisht, lastNodeOffset, lastNodeHeight, distance});
+        // 如果和前一个元素相接就合并;
+        if (teamIdxs[0]) {
+            const prevMargin = parseFloat(getComputedStyle(totalNodes[teamIdxs[0]-1]).getPropertyValue("margin-bottom"));
+            const prevNodeOffset = totalNodes[teamIdxs[0]-1].offsetTop + totalNodes[teamIdxs[0]-1].scrollHeight;
+            if (firstNodeOffset == (prevNodeOffset + prevMargin)) {
+                if (isDev) this.logger.info("检测到相接，进行下一次递归, detail=>", {prevMargin, prevNodeOffset});
+                return this.adjustAlign(nowIdx-1, [teamIdxs[0]-1, ...teamIdxs], totalNodes, mainNode);
+            }
+        }
+        // 如果没有可以和前面合并的就进行处理
+        // 如果判断了合并之后仍然只有一个节点那就直接进行下一个
+        if (teamIdxs.length == 1) return this.adjustAlign(nowIdx-1 , [nowIdx-1], totalNodes, mainNode);
+        // 此时已经获得了完整的组合，开始进行整体调整
+        const blocks = teamIdxs.map(idx => {
+            const id  = totalNodes[idx].dataset.nodeId;
+            const node = mainNode.querySelector(`div[data-node-id="${id}"]`) as HTMLElement;
+            return {
+                node,
+                offset: node.offsetTop,
+                height: node.scrollHeight
+            };
+        }).sort((a,b) => a.offset-b.offset);
+        if (isDev) this.logger.info("获得对应blocks=>", blocks);
+        // 块的加权中心
+        // const blocksCenter = blocks.reduce((sum, block) => {return sum + this.getRelatedTop(mainNode, block) + block.scrollHeight / 2;}, 0) / blocks.length;
+        // 块的几何中心
+        const blocksCenter = (blocks[blocks.length-1].offset + blocks[blocks.length-1].height + blocks[0].offset)/2;
+        const memoCenter = (firstNodeOffset + lastNodeOffset + lastNodeHeight) / 2;
+        const offset = Math.min(distance, memoCenter - blocksCenter);
+        const topOffset = totalNodes[teamIdxs[0]].offsetTop - offset;
+        if (isDev) this.logger.info("移动块整体到新位置, detail=>", {blocksCenter, memoCenter, offset, topOffset});
+        teamIdxs.forEach(idx => {
+            totalNodes[idx].style.top = `${topOffset}px`;
+        });
+        // 如果移动了最大距离说明和前面的又拼一起了
+        if (nowIdx && offset == distance) {
+            if (isDev) this.logger.info("移动后相接，进行下一次递归");
+            return this.adjustAlign(nowIdx-1, [teamIdxs[0]-1, ...teamIdxs], totalNodes, mainNode);
+        }
+        else return this.adjustAlign(nowIdx-1, [nowIdx-1], totalNodes, mainNode);
+    }
+
+    private async refreshEditor() {
+        const mainNodes = this.editorNode.querySelectorAll("div.protyle-wysiwyg") as NodeListOf<HTMLElement>;
+        if (isDev) this.logger.info("获取mainNode=>", mainNodes);
+        // if (!this.checkElementChanged(mainNodes)) return;
+        const changeList = Object.assign({}, this.mainNodeObservers);
+        const pList:Promise<any>[] = [];
+        mainNodes.forEach(mainNode => {
+            const mainNodeID = this.getMainNodeID(mainNode);
+            if (isDev) this.logger.info("等待数据加载完成...");
+            pList.push(this.waitForDataLoading(mainNode).then(() => {
+                if (isDev) this.logger.info("数据加载完成");
+                // 仅改变产生变化的观测器
+                if (changeList[mainNodeID]) delete changeList[mainNodeID];
+                const sidebar = this.addSideBar(mainNode);
+                setTimeout(() => { this.refreshSideBarMemos(mainNode, sidebar);}, 0);
+                const observer = new MutationObserver(this.handleMainNode.bind(this));
+                (observer as any).mainNode = mainNode;
+                (observer as any).sidebar = sidebar;
+                observer.observe(mainNode, {childList:true, subtree:true});
+                this.mainNodeObservers[mainNodeID] = observer;
+                const changeObserver = new MutationObserver(this.handleEditorNode.bind(this));
+                changeObserver.observe(mainNode, {attributes:true});
+                this.mainNodeChangeObservers[mainNodeID] = changeObserver;
+            }));
+        });
+        await Promise.all(pList);
+        // 清除多余的观测器
+        Object.keys(changeList).forEach(id => {
+            this.mainNodeObservers[id].disconnect();
+            this.mainNodeChangeObservers[id].disconnect();
+            this.memoObservers[id].forEach(observer => {
+                observer.disconnect();
+            });
+            delete this.mainNodeObservers[id];
+            delete this.mainNodeChangeObservers[id];
+            delete this.memoObservers[id];
+        });
+    }
+
+    private checkElementChanged(mainNodes: NodeListOf<Element>) {
+        let changed = false;
+        mainNodes.forEach((mainNode, idx) => {
+            const memoNodes = mainNode.querySelectorAll("span[data-type*=\"inline-memo\"]");
+            if (!(this.editorMemoNodes.length > idx ) || this.editorMemoNodes[idx] != memoNodes) {
+                changed = true;
+                this.editorMemoNodes[idx] = memoNodes;
+            }
+        });
+        return changed;
+    }
+
+    private refreshSideBarMemos(mainNode:HTMLElement, sidebar:HTMLElement) {
+        const memoNodes = mainNode.querySelectorAll("span[data-type*=\"inline-memo\"]");
+        const container = document.createElement("div");
+        const indexs:Indexs = {};
+        const mainNodeID = this.getMainNodeID(mainNode);
+        this.memoObservers[mainNodeID]?.forEach(observer => {observer.disconnect();});
+        this.memoObservers[mainNodeID] = [];
+        memoNodes.forEach((memo: HTMLElement) => {
+            const observer = new MutationObserver(this.handleMemoNode.bind(this));
+            observer.observe(memo, {attributes: true});
+            (observer as any).mainNode = mainNode;
+            (observer as any).sidebar = sidebar;
+            this.memoObservers[mainNodeID].push(observer);
+            const block = this.getBlockNode(memo);
+            const node_id  = block.dataset.nodeId;
+            if (!indexs[node_id]) {
+                indexs[node_id] = {};
+                const nodeContainer = document.createElement("div");
+                indexs[node_id].node = block;
+                nodeContainer.style.margin = "16px 8px";
+                nodeContainer.style.position = "relative";
+                nodeContainer.id = `protyle-sidebar-memo-${node_id}`;
+                nodeContainer.setAttribute("data-node-id", node_id);
+                indexs[node_id].container = nodeContainer;
+            }
+            const memoElement = document.createElement("div");
+            const idx = indexs[node_id].container.children.length;
+            memoElement.id = `protyle-sidebar-memo-${node_id}-${idx}`;
+            memoElement.setAttribute("data-node-index", idx.toString());
+            memoElement.style.cssText = "padding:8px;margin:8px;border-radius:6px;font-size:80%;box-shadow: rgb(15 15 15 / 10%) 0px 0px 0px 1px, rgb(15 15 15 / 10%) 0px 2px 4px;";
+            const content = memo.dataset.inlineMemoContent;
+            const originText = memo.textContent;
+            memoElement.innerHTML = `<div data-content-type="number" style="display:inline-block;">${idx+1}</div><div data-content-type="text" style="display:inline-block;font-weight:700;">${originText}</div><div data-content-type="memo" style="margin:8px 0 0 0;word-wrap:break-word;">${content}</div>`;
+            indexs[node_id].container.insertAdjacentElement("beforeend", memoElement);
+        });
+        Object.keys(indexs).forEach( id => {
+            const nodeContainer = indexs[id].container;
+            container.insertAdjacentElement("beforeend", nodeContainer);
+        });
+        sidebar.innerHTML = container.innerHTML;
+        this.refreshMemoOffset(mainNode, sidebar, indexs);
+    }
+
+    private refreshMemoOffset(mainNode:HTMLElement, sidebar:HTMLElement, indexs:Indexs) {
+        const alignCenter = this.alignCenter;
+        Object.keys(indexs).reduce((prv, id) => {
+            const item = sidebar.querySelector(`div[data-node-id="${id}"]`) as HTMLElement;
+            const block = mainNode.querySelector(`div[data-node-id="${id}"]`) as HTMLElement;
+            let offsetHeight = this.getRelatedTop(mainNode, block);
+            offsetHeight += alignCenter ? this.getCenterOffset(block, item) : 0;
+            offsetHeight -= Math.min(item.offsetTop, offsetHeight - prv.elemOffset);
+            this.logger.info("节点offset初始化, detail=>", {mainNode, sidebar, item, block, offsetHeight, blockOffset: this.getRelatedTop(mainNode, block)});
+            item.style.top = `${offsetHeight}px`;
+            return {elemOffset: offsetHeight};
+        }, {elemOffset: 0});
+        const totalNodes = sidebar.children as HTMLCollectionOf<HTMLElement>;
+        if (alignCenter) this.adjustAlign(totalNodes.length - 1, [totalNodes.length - 1], totalNodes, mainNode);
+    }
+
+    private getBlockNode(sourceNode:HTMLElement) {
+        let node = sourceNode;
+        while (!node.dataset.nodeId) {
+            node = node.parentElement;
+        }
+        return node;
+    }
+
+    private getCenterOffset(block:HTMLElement, item:HTMLElement) {
+        return block.scrollHeight / 2 - item.scrollHeight / 2;
+    }
+
+    private getMainNodeID(mainNode: HTMLElement) {
+        return mainNode.parentElement.parentElement.getAttribute("data-id");
+    }
+
+    private getRelatedTop(parentNode:HTMLElement, targetNode:HTMLElement) {
+        return targetNode.getBoundingClientRect().y - parentNode.getBoundingClientRect().y;
+    }
+
+    private async waitForDataLoading(mainNode: HTMLElement) {
+        const rootNode = mainNode.parentElement.parentElement;
+        let ready = (rootNode.dataset.loading == "finished");
+        while (!ready) {
+            ready = (rootNode.dataset.loading == "finished");
+            await sleep(50);
+        }
+        await sleep(500);
     }
 }
