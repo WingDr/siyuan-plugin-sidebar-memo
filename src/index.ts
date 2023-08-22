@@ -18,6 +18,13 @@ interface Indexs {
     }
 }
 
+interface MergedMemo {
+    block: HTMLElement,
+    totalContent: string
+    memo: string
+    originIndexs: number[]
+}
+
 export default class PluginSidebarMemo extends Plugin {
 
     private isMobile: boolean;
@@ -72,7 +79,7 @@ export default class PluginSidebarMemo extends Plugin {
         });
 
         this.logger = createLogger("main");
-        this.eventBus.on("loaded-protyle", this.refreshEditor.bind(this));
+        this.eventBus.on("loaded-protyle", (ev) => {console.log(JSON.parse(JSON.stringify(ev.detail.element)));this.refreshEditor();});
     }
 
     async onLayoutReady() {
@@ -171,18 +178,29 @@ export default class PluginSidebarMemo extends Plugin {
                 if (mutation.type === "attributes") {
                     if (isDev) this.logger.info("Memo Observer Callback, detail=>", {mutation, observer});
                     const memo = mutation.target as HTMLElement;
-                    const memoContent = memo.getAttribute("data-inline-memo-content");
                     const block = this.getBlockNode(memo);
                     const node_id = block.getAttribute("data-node-id");
-                    const memoNodes = block.querySelectorAll("span[data-type*=\"inline-memo\"]");
+                    const memoNodes = block.querySelectorAll("span[data-type*=\"inline-memo\"]") as NodeListOf<HTMLElement>;
+                    const mergedMemo = this.getMergedMemos(memoNodes);
                     const sidebar = (observer as unknown as {sidebar:HTMLElement}).sidebar;
+                    // 找到所在块中的index
                     let idx = 0;
                     for (let i = 0; i < memoNodes.length; ++i) {
                         const item = memoNodes[i];
                         if (item == memo) idx = i;
                     }
-                    const sidebarBlock = sidebar.querySelector(`div[id="protyle-sidebar-memo-${node_id}-${idx}"]`);
+                    // 找到在合并结果后的index
+                    let mergedIdx = 0;
+                    for (let i = 0; i < mergedMemo.length; ++i) {
+                        if (mergedMemo[i].originIndexs.indexOf(idx) != -1) mergedIdx = i;
+                    }
+                    const sidebarBlock = sidebar.querySelector(`div[id="protyle-sidebar-memo-${node_id}-${mergedIdx}"]`);
+                    // 如果找不到对应的块就刷新一遍读取
+                    if (!sidebarBlock) return this.refreshSideBarMemos((observer as any).mainNode, sidebar);
                     const sidebarMemo = sidebarBlock.querySelector("div[data-content-type=\"memo\"]") as HTMLElement;
+                    // 如果找到的块不对也说明memo错位了
+                    if (sidebarMemo.textContent != mergedMemo[mergedIdx].totalContent) return this.refreshSideBarMemos((observer as any).mainNode, sidebar);
+                    const memoContent = mergedMemo[mergedIdx].memo;
                     sidebarMemo.innerText = `${memoContent}`;
                 }
             }
@@ -246,19 +264,18 @@ export default class PluginSidebarMemo extends Plugin {
         const lastNodeOffset = totalNodes[teamIdxs[teamIdxs.length - 1]].offsetTop;
         const lastNodeHeight = totalNodes[teamIdxs[teamIdxs.length - 1]].scrollHeight;
 
-        // 可以容许的最大移动路径
-        if (teamIdxs[0]) distance = firstNodeOffset - totalNodes[teamIdxs[0]-1].offsetTop;
-        else distance = firstNodeOffset;
-        if (isDev) this.logger.info("节点初始计算, detail=>", {nowIdx, teamIdxs, firstNodeOffset, firstNodeHeisht, lastNodeOffset, lastNodeHeight, distance});
         // 如果和前一个元素相接就合并;
         if (teamIdxs[0]) {
             const prevMargin = parseFloat(getComputedStyle(totalNodes[teamIdxs[0]-1]).getPropertyValue("margin-bottom"));
             const prevNodeOffset = totalNodes[teamIdxs[0]-1].offsetTop + totalNodes[teamIdxs[0]-1].scrollHeight;
-            if (firstNodeOffset == (prevNodeOffset + prevMargin)) {
+            // 可以容许的最大移动路径
+            distance = firstNodeOffset - (prevNodeOffset + prevMargin);
+            if (!distance) {
                 if (isDev) this.logger.info("检测到相接，进行下一次递归, detail=>", {prevMargin, prevNodeOffset});
                 return this.adjustAlign(nowIdx-1, [teamIdxs[0]-1, ...teamIdxs], totalNodes, mainNode);
             }
-        }
+        } else distance = firstNodeOffset;
+        if (isDev) this.logger.info("节点初始计算, detail=>", {nowIdx, teamIdxs, firstNodeOffset, firstNodeHeisht, lastNodeOffset, lastNodeHeight, distance});
         // 如果没有可以和前面合并的就进行处理
         // 如果判断了合并之后仍然只有一个节点那就直接进行下一个
         if (teamIdxs.length == 1) return this.adjustAlign(nowIdx-1 , [nowIdx-1], totalNodes, mainNode);
@@ -268,7 +285,7 @@ export default class PluginSidebarMemo extends Plugin {
             const node = mainNode.querySelector(`div[data-node-id="${id}"]`) as HTMLElement;
             return {
                 node,
-                offset: node.offsetTop,
+                offset: this.getRelatedTop(mainNode, node),
                 height: node.scrollHeight
             };
         }).sort((a,b) => a.offset-b.offset);
@@ -279,7 +296,7 @@ export default class PluginSidebarMemo extends Plugin {
         const blocksCenter = (blocks[blocks.length-1].offset + blocks[blocks.length-1].height + blocks[0].offset)/2;
         const memoCenter = (firstNodeOffset + lastNodeOffset + lastNodeHeight) / 2;
         const offset = Math.min(distance, memoCenter - blocksCenter);
-        const topOffset = totalNodes[teamIdxs[0]].offsetTop - offset;
+        const topOffset = parseFloat(totalNodes[teamIdxs[0]].style.top) - offset;
         if (isDev) this.logger.info("移动块整体到新位置, detail=>", {blocksCenter, memoCenter, offset, topOffset});
         teamIdxs.forEach(idx => {
             totalNodes[idx].style.top = `${topOffset}px`;
@@ -344,7 +361,8 @@ export default class PluginSidebarMemo extends Plugin {
     }
 
     private refreshSideBarMemos(mainNode:HTMLElement, sidebar:HTMLElement) {
-        const memoNodes = mainNode.querySelectorAll("span[data-type*=\"inline-memo\"]");
+        const memoNodes = mainNode.querySelectorAll("span[data-type*=\"inline-memo\"]") as NodeListOf<HTMLElement>;
+        const mergedMemoNodes = this.getMergedMemos(memoNodes);
         const container = document.createElement("div");
         const indexs:Indexs = {};
         const mainNodeID = this.getMainNodeID(mainNode);
@@ -356,7 +374,9 @@ export default class PluginSidebarMemo extends Plugin {
             (observer as any).mainNode = mainNode;
             (observer as any).sidebar = sidebar;
             this.memoObservers[mainNodeID].push(observer);
-            const block = this.getBlockNode(memo);
+        });
+        mergedMemoNodes.forEach(memo => {
+            const block = memo.block;
             const node_id  = block.dataset.nodeId;
             if (!indexs[node_id]) {
                 indexs[node_id] = {};
@@ -373,8 +393,8 @@ export default class PluginSidebarMemo extends Plugin {
             memoElement.id = `protyle-sidebar-memo-${node_id}-${idx}`;
             memoElement.setAttribute("data-node-index", idx.toString());
             memoElement.style.cssText = "padding:8px;margin:8px;border-radius:6px;font-size:80%;box-shadow: rgb(15 15 15 / 10%) 0px 0px 0px 1px, rgb(15 15 15 / 10%) 0px 2px 4px;";
-            const content = memo.dataset.inlineMemoContent;
-            const originText = memo.textContent;
+            const content = memo.memo;
+            const originText = memo.totalContent;
             memoElement.innerHTML = `<div data-content-type="number" style="display:inline-block;">${idx+1}</div><div data-content-type="text" style="display:inline-block;font-weight:700;">${originText}</div><div data-content-type="memo" style="margin:8px 0 0 0;word-wrap:break-word;">${content}</div>`;
             indexs[node_id].container.insertAdjacentElement("beforeend", memoElement);
         });
@@ -416,6 +436,33 @@ export default class PluginSidebarMemo extends Plugin {
 
     private getMainNodeID(mainNode: HTMLElement) {
         return mainNode.parentElement.parentElement.getAttribute("data-id");
+    }
+
+    private getMergedMemos(memoNodes: NodeListOf<HTMLElement>): MergedMemo[] {
+        const mergedRes:MergedMemo[] = [];
+        memoNodes.forEach((memo, idx) => {
+            const block = this.getBlockNode(memo);
+            const memoContent = memo.getAttribute("data-inline-memo-content");
+            if (idx) {
+                const lastMerged = mergedRes[mergedRes.length-1];
+                const lastIndex = lastMerged.originIndexs[lastMerged.originIndexs.length-1];
+                if (memoNodes[lastIndex].nextSibling == memo 
+                    && block == lastMerged.block
+                    && lastMerged.memo == memoContent) {
+                    lastMerged.totalContent += memo.textContent;
+                    lastMerged.originIndexs.push(idx);
+                    return;
+                }
+            }
+            mergedRes.push({
+                block,
+                totalContent: memo.textContent,
+                memo: memoContent,
+                originIndexs: [idx]
+            });
+        });
+        if (isDev) this.logger.info("获得合并memo=>", mergedRes);
+        return mergedRes;
     }
 
     private getRelatedTop(parentNode:HTMLElement, targetNode:HTMLElement) {
