@@ -4,8 +4,8 @@
   "url": "https://github.com/WingDr/siyuan-plugin-sidebar-memo",
   "version": "0.1.0",
   "minAppVersion": "2.10.0",
-  "backends": ["windows", "linux", "darwin"],
-  "frontends": ["desktop"],
+  "backends": ["all"],
+  "frontends": ["desktop", "desktop-window", "browser-desktop"],
   "displayName": {
     "default": "Sidebar Memo",
     "zh_CN": "侧边备注"
