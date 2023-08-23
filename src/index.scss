@@ -76,13 +76,4 @@
 		  display:none;
 		}
 	}
-	
-	@media screen and (min-width: 500px){
-		.protyle-content[data-fullwidth="true"]:has(span[data-type*="inline-memo"]):has(div[id="protyle-sidebar"]) .protyle-wysiwyg{
-		padding-right:var(--sidebar-memo-editor-padding-right)!important;
-		}
-		.protyle-content[data-fullwidth="true"]:has(span[data-type*="inline-memo"])  #protyle-sidebar{
-		right:var(--sidebar-memo-sidebar-right)!important;
-		}
-	}
 }

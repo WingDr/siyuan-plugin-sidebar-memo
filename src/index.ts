@@ -313,7 +313,7 @@ export default class PluginSidebarMemo extends Plugin {
             sidebar.id = "protyle-sidebar";
             titleNode.insertAdjacentElement("beforeend", sidebar);
             const width = fullwidth ? 230 : paddingRight - 20;
-            sidebar.style.cssText = `position:absolute;right:-${width}px;width:${width}px;z-index:105;`;
+            sidebar.style.cssText = `position:absolute;right:-${width}px;width:${width}px;z-index:3;`;
             sidebar.scrollTop = titleNode.scrollTop;
             mainNode.style.minWidth = "90%";
         }
