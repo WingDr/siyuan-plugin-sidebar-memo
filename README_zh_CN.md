@@ -2,11 +2,14 @@
 
 # 侧边备注
 
-> 让你的备注再侧边显示
-
 ## 使用方法
 
-安装插件后，通过`顶栏“侧边备注”按钮->“切换备注的侧边显示”`即可打开侧边显示，再按一次就是关闭。
+安装插件后，通过`顶栏“侧边备注”按钮->“打开备注的侧边显示”`即可打开侧边显示，再按一次就是关闭（此时按钮文本为`“关闭备注的侧边显示”`）。
+
+## 不显示侧边栏的原因
+
+1. 检查思源笔记的窗口宽度是否足够大，目前小于500px的窗口宽度就不会显示侧边栏。
+2. 检查笔记编辑器的右侧空白是否足够大，右侧空白小于250px就不会显示侧边栏。
 
 ## 主题适配/备注样式修改
 
@@ -22,8 +25,8 @@
 	--sidebar-memo-number-background-color:var(--b3-theme-primary);
 	--sidebar-memo-number-not-only-child-width:18px;
 	--sidebar-memo-number-not-only-child-color:var(--b3-theme-background);
-	--sidebar-memo-editor-padding-right: 250px;
-	--sidebar-memo-sidebar-right: -80px;
+	--sidebar-memo-editor-padding-right: 280px;
+	--sidebar-memo-sidebar-right: -50px;
 	--sidebar-memo-text-max-width: 150px;
 }
 ```

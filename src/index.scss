@@ -31,10 +31,10 @@
 	--sidebar-memo-number-background-color:var(--b3-theme-primary);
 	--sidebar-memo-number-not-only-child-width:18px;
 	--sidebar-memo-number-not-only-child-color:var(--b3-theme-background);
-	--sidebar-memo-editor-padding-right: 250px;
-	--sidebar-memo-sidebar-right: -80px;
+	--sidebar-memo-editor-padding-right: 280px;
+	--sidebar-memo-sidebar-right: -50px;
 	--sidebar-memo-disapear-screen-width: 1280px;
-	--sidebar-memo-text-max-width: 150px;
+	--sidebar-memo-text-max-width: calc(90% - 24px);
 
 	[data-content-type="number"]{
 		height:var(--sidebar-memo-number-height);
@@ -62,7 +62,7 @@
 		margin: auto;
 	}
 
-	@media screen and (min-width: 1280px){
+	@media screen and (min-width: 500px){
 		.protyle-content[data-fullwidth="true"]:has(span[data-type*="inline-memo"]):has(div[id="protyle-sidebar"]) .protyle-wysiwyg{
 		padding-right:var(--sidebar-memo-editor-padding-right)!important;
 		}
@@ -71,13 +71,13 @@
 		}
 	}
 	
-	@media screen and (max-width: 1279px) {
+	@media screen and (max-width: 499px) {
 		.protyle-content  #protyle-sidebar{
 		  display:none;
 		}
 	}
 	
-	@media screen and (min-width: 1280px){
+	@media screen and (min-width: 500px){
 		.protyle-content[data-fullwidth="true"]:has(span[data-type*="inline-memo"]):has(div[id="protyle-sidebar"]) .protyle-wysiwyg{
 		padding-right:var(--sidebar-memo-editor-padding-right)!important;
 		}

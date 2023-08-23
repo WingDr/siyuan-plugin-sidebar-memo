@@ -2,11 +2,14 @@
 
 # Sidebar Memo
 
-> Display your memos in the sidebar
+## Usage Instructions
 
-## Usage
+After installing the plugin, you can open the sidebar display by clicking on the "Sidebar Memo" button in the top bar and selecting "Open Sidebar Memos". Clicking again will close it (at this point, the button text will change to "Close Sidebar Memos").
 
-After installing the plugin, you can open the sidebar display by clicking on the "Sidebar Memo" button in the top bar and selecting "Toggle Sidebar Memo Display". Clicking again will close it.
+## Reasons for Sidebar Not Displaying
+
+1. Check if the window width of SiYuan Note is sufficiently large. The sidebar won't be displayed if the window width is less than 500px.
+2. Ensure that the right-side blank space of the note editor is large enough. The sidebar won't be displayed if the right-side blank space is less than 250px.
 
 ## Theme Compatibility / Customizing Memo Styles
 
@@ -22,8 +25,8 @@ Most of the memo styles are set using CSS variables. Here's the specific code:
 	--sidebar-memo-number-background-color: var(--b3-theme-primary);
 	--sidebar-memo-number-not-only-child-width: 18px;
 	--sidebar-memo-number-not-only-child-color: var(--b3-theme-background);
-	--sidebar-memo-editor-padding-right: 250px;
-	--sidebar-memo-sidebar-right: -80px;
+	--sidebar-memo-editor-padding-right: 280px;
+	--sidebar-memo-sidebar-right: -50px;
 	--sidebar-memo-text-max-width: 150px;
 }
 ```

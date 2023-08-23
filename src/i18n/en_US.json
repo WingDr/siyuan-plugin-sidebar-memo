@@ -10,5 +10,7 @@
   "confirmRemove": "Confirm to delete the data in ${name}?",
   "insertEmoji": "Insert Emoji",
   "name": "Sidebar Memos",
-  "switchSidebarMemo": "Toggle Sidebar Memos Display"
+  "openSidebarMemo": "Open Sidebar Memos",
+  "closeSidebarMemo": "Close Sidebar Memos",
+  "noEnoughPaddingRight": "No enough padding at the right of editor."
 }

@@ -2,7 +2,7 @@
   "name": "siyuan-plugin-sidebar-memo",
   "author": "WingDr",
   "url": "https://github.com/WingDr/siyuan-plugin-sidebar-memo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "minAppVersion": "2.10.0",
   "backends": ["all"],
   "frontends": ["desktop", "desktop-window", "browser-desktop"],

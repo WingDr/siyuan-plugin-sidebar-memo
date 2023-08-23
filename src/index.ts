@@ -2,7 +2,8 @@ import {
     Plugin,
     Menu,
     getFrontend,
-    Setting
+    Setting,
+    showMessage
 } from "siyuan";
 import "./index.scss";
 import { isDev } from "./constants";
@@ -30,6 +31,7 @@ export default class PluginSidebarMemo extends Plugin {
     private isMobile: boolean;
     private onChange: boolean;
     private alignCenter: boolean;
+    private minPaddingRight = 150;
 
     private logger: ILogger;
 
@@ -39,8 +41,12 @@ export default class PluginSidebarMemo extends Plugin {
     private refreshEditorBindThis = this.refreshEditor.bind(this);
     private handleMainNode: MutationCallback;
     private handleMemoNode: MutationCallback;
+    private handleMainNodeAttr: MutationCallback;
+    private handelProtyleNodeAttr: MutationCallback;
 
+    private protyleObservers: {[mainNodeID: string]: MutationObserver};
     private mainNodeObservers: {[mainNodeID: string]: MutationObserver};
+    private mainNodeAttrObserver: {[mainNodeID: string]: MutationObserver};
     private memoObservers: {[mainNodeID: string]: MutationObserver[]};
 
     onload() {
@@ -80,6 +86,8 @@ export default class PluginSidebarMemo extends Plugin {
         this.editorNode = document.querySelector("div.layout__center");
         this.memoObservers = {};
         this.mainNodeObservers = {};
+        this.mainNodeAttrObserver = {};
+        this.protyleObservers = {};
         this.onChange = false;
         this.alignCenter = true;
 
@@ -128,7 +136,7 @@ export default class PluginSidebarMemo extends Plugin {
         if (!this.isMobile) {
             menu.addItem({
                 icon: "iconLayoutBottom",
-                label: this.i18n.switchSidebarMemo,
+                label: this.data[STORAGE_NAME].openSideBarMemo ? this.i18n.closeSidebarMemo : this.i18n.openSidebarMemo,
                 click: () => {
                     this.openSideBar(!this.data[STORAGE_NAME].openSideBarMemo);
                 }
@@ -147,23 +155,32 @@ export default class PluginSidebarMemo extends Plugin {
 
     private initHandleFunctions() {
         this.handleMainNode = async (mutationsList, observer) => { 
-          for (const mutation of mutationsList) {
-            if (isDev) this.logger.info("Main Node Observer Callback, detail=>", {mutation, observer});
-            if (this.onChange) return;
-            this.onChange = true;
-            const mainNode = (observer as any).mainNode;
-            const sidebar = (observer as any).sidebar;
-            // await this.waitForDataLoading(mainNode);
-            setTimeout(() => { 
-                this.refreshSideBarMemos(mainNode, sidebar);
-                this.onChange = false;
-            }, 0);
-          }
+            const targeList:Node[] = [];
+            for (const mutation of mutationsList) {
+                if (targeList.indexOf(mutation.target) != -1) continue;
+                else targeList.push(mutation.target);
+                if (isDev) this.logger.info("Main Node Observer Callback, detail=>", {mutation, observer});
+                if (this.onChange) return;
+                this.onChange = true;
+                const mainNode = (observer as any).mainNode;
+                const sidebar = (observer as any).sidebar;
+                // await this.waitForDataLoading(mainNode);
+                setTimeout(() => { 
+                    if (this.data[STORAGE_NAME].openSideBarMemo) {
+                        this.refreshSideBarMemos(mainNode, sidebar);
+                    } else this.openSideBar(false);
+                    this.onChange = false;
+                }, 0);
+            }
         };
         this.handleMemoNode = (mutationsList, observer) => {
+            const targeList:Node[] = [];
             for (const mutation of mutationsList) {
                 if (mutation.type === "attributes") {
+                    if (targeList.indexOf(mutation.target) != -1) continue;
+                    else targeList.push(mutation.target);
                     if (isDev) this.logger.info("Memo Observer Callback, detail=>", {mutation, observer});
+                    if (!this.data[STORAGE_NAME].openSideBarMemo) {this.openSideBar(false);return;}
                     const memo = mutation.target as HTMLElement;
                     const block = this.getBlockNode(memo);
                     const node_id = block.getAttribute("data-node-id");
@@ -192,6 +209,53 @@ export default class PluginSidebarMemo extends Plugin {
                 }
             }
         };
+        this.handleMainNodeAttr = async (mutationList, observer) => {
+            const targeList:Node[] = [];
+            for (const mutation of mutationList) {
+                if (mutation.type == "attributes") {
+                    if (targeList.indexOf(mutation.target) != -1) continue;
+                    else targeList.push(mutation.target);
+                    if (isDev) this.logger.info("Attr Observer触发, detail=>", {mutation,observer});
+                    const mainNode = (observer as any).mainNode;
+                    const sidebar = (observer as any).sidebar;
+                    // await this.waitForDataLoading(mainNode, true);
+                    const paddingRight = parseFloat(getComputedStyle(mainNode).paddingRight);
+                    const fullwidth = mainNode.parentElement.dataset.fullwidth;
+                    const isDisplayed = (mainNode.parentElement.parentElement.getAttribute("class").indexOf("fn__none") == -1);
+                    if (isDisplayed && !fullwidth && (paddingRight < this.minPaddingRight)) {
+                        if (isDev) this.logger.info("编辑器宽度不足，取消侧栏，paddingRight=>", {paddingRight});
+                        showMessage(this.i18n.noEnoughPaddingRight, 2000, "info");
+                        this.openSideBar(false);
+                    } else {
+                        if (isDev) this.logger.info("宽度改变，进行刷新，paddingRight=>", {paddingRight});
+                        if (!isDisplayed) {
+                            if (isDev) this.logger.info("这个页面没渲染，不着急，mainNode=>", {mainNode});
+                            return;
+                        }
+                        sidebar?.remove();
+                        await this.refreshEditor();
+                    }
+                }
+            }
+        };
+        this.handelProtyleNodeAttr = async (mutationList, observer) => {
+            const targeList:Node[] = [];
+            for (const mutation of mutationList) {
+                console.log(mutation);
+                if (mutation.type == "attributes") {
+                    if (targeList.indexOf(mutation.target) != -1) continue;
+                    else targeList.push(mutation.target);
+                    if (isDev) this.logger.info("Protyle Observer触发, detail=>", {mutation,observer});
+                    const mainNode = (observer as any).mainNode;
+                    const isDisplayed = ((mutation.target as HTMLElement).getAttribute("class").indexOf("fn__none") == -1);
+                    if (isDisplayed) {
+                        const sidebar = this.addSideBar(mainNode);
+                        await this.waitForDataLoading(mainNode);
+                        this.refreshSideBarMemos(mainNode, sidebar);
+                    }
+                }
+            }
+        };
     }
 
     private openSideBar(open: boolean, save=true) {
@@ -204,16 +268,23 @@ export default class PluginSidebarMemo extends Plugin {
         } else {
             this.eventBus.off("loaded-protyle", this.refreshEditorBindThis);
             Object.keys(this.mainNodeObservers).forEach(id => {
-                this.mainNodeObservers[id].disconnect();
+                this.mainNodeObservers[id]?.disconnect();
+                if (isDev) this.logger.info("关闭mainNodeObserver=>", {id});
             });
+            if (isDev) this.logger.info(`关闭mainNodeAttrObserver${Object.keys(this.mainNodeAttrObserver).length}个`);
+            Object.values(this.mainNodeAttrObserver).forEach(observer => observer.disconnect());
+            if (isDev) this.logger.info(`关闭protyleObserver${Object.keys(this.protyleObservers).length}个`);
+            Object.values(this.protyleObservers).forEach(observer => observer.disconnect());
             Object.keys(this.memoObservers).forEach(id => {
                 this.memoObservers[id]?.forEach(observer => {observer.disconnect();});
+                if (isDev) this.logger.info("关闭memoObserver=>", {id});
             });
             const mainNodes = this.editorNode.querySelectorAll("div.protyle-wysiwyg") as NodeListOf<HTMLElement>;
             mainNodes.forEach(mainNode=> {
                 const sidebar = mainNode.parentElement.querySelector("#protyle-sidebar") as HTMLElement;
                 sidebar?.remove();
             });
+            if (isDev) this.logger.info("侧栏已关闭，Observer已关闭");
         }
         if (save) {
             const setting = {
@@ -227,12 +298,22 @@ export default class PluginSidebarMemo extends Plugin {
     private addSideBar(mainNode: HTMLElement) {
         let sidebar = mainNode.parentElement.querySelector("#protyle-sidebar") as HTMLElement;
         const titleNode = mainNode.parentElement.querySelector("div.protyle-title");
+        const paddingRight = parseFloat(globalThis.getComputedStyle(mainNode).paddingRight);
+        const fullwidth = mainNode.parentElement.dataset.fullwidth;
+        const isDisplayed = (mainNode.parentElement.parentElement.getAttribute("class").indexOf("fn__none") == -1);
+        if (isDisplayed && !fullwidth && (paddingRight < this.minPaddingRight)) {
+            if (isDev) this.logger.info("编辑器宽度不足，取消侧栏，detail=>", {mainNode, paddingRight});
+            showMessage(this.i18n.noEnoughPaddingRight, 2000, "info");
+            return null;
+        }
+        if (isDev) this.logger.info("编辑器宽度足够，detail=>", {mainNode, paddingRight});
         if (!sidebar) {
             sidebar = document.createElement("div");
             sidebar.scrollTop = mainNode.scrollTop;
             sidebar.id = "protyle-sidebar";
             titleNode.insertAdjacentElement("beforeend", sidebar);
-            sidebar.style.cssText = "position:absolute;right:-230px;width:230px";
+            const width = fullwidth ? 230 : paddingRight - 20;
+            sidebar.style.cssText = `position:absolute;right:-${width}px;width:${width}px;z-index:105;`;
             sidebar.scrollTop = titleNode.scrollTop;
             mainNode.style.minWidth = "90%";
         }
@@ -299,33 +380,72 @@ export default class PluginSidebarMemo extends Plugin {
         // if (!this.checkElementChanged(mainNodes)) return;
         const changeList = Object.assign({}, this.mainNodeObservers);
         const pList:Promise<any>[] = [];
+        let close = false;
         mainNodes.forEach(mainNode => {
             const mainNodeID = this.getMainNodeID(mainNode);
             if (isDev) this.logger.info("等待数据加载完成...");
-            // 仅改变产生变化的观测器
+            // 记录产生变化的观测器
             if (changeList[mainNodeID]) delete changeList[mainNodeID];
-            const size = Object.assign({}, getComputedStyle(mainNode));
             const sidebar = this.addSideBar(mainNode);
-            pList.push(this.waitForDataLoading(mainNode, size).then(() => {
+            pList.push(this.waitForDataLoading(mainNode).then(async () => {
                 if (isDev) this.logger.info("数据加载完成");
+                // 如果不满足生成sidebar的条件就不生成了
+                if (!sidebar) {close = true; return;}
                 setTimeout(() => { this.refreshSideBarMemos(mainNode, sidebar);}, 0);
-                const observer = new MutationObserver(this.handleMainNode.bind(this));
+                // 没有观测器就加入观测器
+                let observer = this.mainNodeObservers[mainNodeID];
+                if (!observer) {
+                    if (isDev) this.logger.info(`向${mainNodeID}中加入mainNodeObserver`);
+                    observer = new MutationObserver(this.handleMainNode.bind(this));
+                    this.mainNodeObservers[mainNodeID] = observer;
+                } else {
+                    observer.disconnect();
+                }
                 (observer as any).mainNode = mainNode;
                 (observer as any).sidebar = sidebar;
                 observer.observe(mainNode, {childList:true, subtree:true});
-                this.mainNodeObservers[mainNodeID] = observer;
+                let attrObserver = this.mainNodeAttrObserver[mainNodeID];
+                if (!attrObserver) {
+                    if (isDev) this.logger.info(`向${mainNodeID}中加入mainNodeAttrObserver`);
+                    attrObserver = new MutationObserver(this.handleMainNodeAttr.bind(this));
+                    this.mainNodeAttrObserver[mainNodeID] = attrObserver;
+                } else {
+                    attrObserver.disconnect();
+                }
+                attrObserver.observe(mainNode, {attributes: true});
+                (attrObserver as any).mainNode = mainNode;
+                (attrObserver as any).sidebar = sidebar;
+                // 监听protyle的切换，切换到哪个protyle就刷新哪个
+                let protyleObserver = this.protyleObservers[mainNodeID];
+                if (!protyleObserver) {
+                    if (isDev) this.logger.info(`向${mainNodeID}中加入mainNodeObserver`);
+                    protyleObserver = new MutationObserver(this.handelProtyleNodeAttr.bind(this));
+                    this.protyleObservers[mainNodeID] = protyleObserver;
+                } else {
+                    protyleObserver.disconnect();
+                }
+                (protyleObserver as any).mainNode = mainNode;
+                (protyleObserver as any).sidebar = sidebar;
+                protyleObserver.observe(mainNode.parentElement.parentElement, {attributes:true});
             }));
         });
         await Promise.all(pList);
         // 清除多余的观测器
         Object.keys(changeList).forEach(id => {
-            this.mainNodeObservers[id].disconnect();
-            this.memoObservers[id].forEach(observer => {
+            this.mainNodeObservers[id]?.disconnect();
+            this.mainNodeAttrObserver[id]?.disconnect();
+            this.protyleObservers[id]?.disconnect();
+            this.memoObservers[id]?.forEach(observer => {
                 observer.disconnect();
             });
             delete this.mainNodeObservers[id];
+            delete this.mainNodeAttrObserver[id];
+            delete this.protyleObservers[id];
             delete this.memoObservers[id];
         });
+        if (close) {
+            this.openSideBar(false);
+        }
     }
 
     private refreshSideBarMemos(mainNode:HTMLElement, sidebar:HTMLElement) {
@@ -363,7 +483,7 @@ export default class PluginSidebarMemo extends Plugin {
             memoElement.style.cssText = "padding:8px;margin:8px;border-radius:6px;font-size:80%;box-shadow: rgb(15 15 15 / 10%) 0px 0px 0px 1px, rgb(15 15 15 / 10%) 0px 2px 4px;";
             const content = memo.memo;
             const originText = memo.totalContent;
-            memoElement.innerHTML = `<div data-content-type="number" style="display:inline-block;">${idx+1}</div><div data-content-type="text" style="display:inline-block;font-weight:700;">${originText}</div><div data-content-type="memo" style="margin:8px 0 0 0;word-wrap:break-word;">${content}</div>`;
+            memoElement.innerHTML = `<div data-content-type="number" style="display:inline-block;">${idx+1}</div><div data-content-type="text" style="display:inline-block;font-weight:700;user-select:text;">${originText}</div><div data-content-type="memo" style="margin:8px 0 0 0;word-wrap:break-word;user-select:text;">${content}</div>`;
             indexs[node_id].container.insertAdjacentElement("beforeend", memoElement);
         });
         Object.keys(indexs).forEach( id => {
@@ -437,12 +557,14 @@ export default class PluginSidebarMemo extends Plugin {
         return targetNode.getBoundingClientRect().y - parentNode.getBoundingClientRect().y;
     }
 
-    private async waitForDataLoading(mainNode: HTMLElement, originSize:{padding: string, width: string}) {
+    private async waitForDataLoading(mainNode: HTMLElement, check=false) {
         // 只有全宽模式要改变宽度，所以只有全宽模式要等待
         const fullwidth = mainNode.parentElement.dataset.fullwidth;
         if (isDev) this.logger.info(`检测到${fullwidth ? "是" : "不是" }全宽模式`);
-        if (!fullwidth) return await sleep(100);
+        if (!fullwidth && !check) return await sleep(100);
         let i = 0;
+        const originSize = Object.assign({}, getComputedStyle(mainNode));
+        await sleep(50);
         let ready = (originSize.padding != getComputedStyle(mainNode).padding || originSize.width != getComputedStyle(mainNode).width);
         while (!ready) {
             ready = (originSize.padding != getComputedStyle(mainNode).padding || originSize.width != getComputedStyle(mainNode).width);
@@ -450,7 +572,7 @@ export default class PluginSidebarMemo extends Plugin {
             // console.log("now", getComputedStyle(mainNode).padding, getComputedStyle(mainNode).width);
             await sleep(50);
             i += 1;
-            if (i == 10) break;
+            if (i == 5) break;
         }
         let former = {padding: "", width: ""};
         ready = (former.padding == getComputedStyle(mainNode).padding && former.width == getComputedStyle(mainNode).width);
@@ -461,7 +583,7 @@ export default class PluginSidebarMemo extends Plugin {
             // console.log("former", former.padding, former.width);
             // console.log("now", getComputedStyle(mainNode).padding, getComputedStyle(mainNode).width);
             i += 1;
-            if (i == 20) break;
+            if (i == 10) break;
         }
     }
 }
