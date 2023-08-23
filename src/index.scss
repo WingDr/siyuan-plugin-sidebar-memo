@@ -31,9 +31,7 @@
 	--sidebar-memo-number-background-color:var(--b3-theme-primary);
 	--sidebar-memo-number-not-only-child-width:18px;
 	--sidebar-memo-number-not-only-child-color:var(--b3-theme-background);
-	--sidebar-memo-editor-padding-right: 280px;
-	--sidebar-memo-sidebar-right: -50px;
-	--sidebar-memo-disapear-screen-width: 1280px;
+	--sidebar-memo-sidebar-width: 230px;
 	--sidebar-memo-text-max-width: calc(90% - 24px);
 
 	[data-content-type="number"]{
@@ -64,16 +62,20 @@
 
 	@media screen and (min-width: 500px){
 		.protyle-content[data-fullwidth="true"]:has(span[data-type*="inline-memo"]):has(div[id="protyle-sidebar"]) .protyle-wysiwyg{
-		padding-right:var(--sidebar-memo-editor-padding-right)!important;
+			width:calc( 100% - 230px )!important;
+			min-width: unset!important;
 		}
 		.protyle-content[data-fullwidth="true"]:has(span[data-type*="inline-memo"])  #protyle-sidebar{
-		right: var(--sidebar-memo-sidebar-right)!important;
+			right:0px !important
 		}
 	}
 	
 	@media screen and (max-width: 499px) {
+		.protyle-content[data-fullwidth=true]:has(span[data-type*=inline-memo]):has(div[id=protyle-sidebar]) .protyle-wysiwyg {
+			width:100%!important;
+		}
 		.protyle-content  #protyle-sidebar{
-		  display:none;
+			display:none
 		}
 	}
 }
