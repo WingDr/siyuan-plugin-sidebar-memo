@@ -7,6 +7,7 @@ const CopyPlugin = require("copy-webpack-plugin");
 const ZipPlugin = require("zip-webpack-plugin");
 
 module.exports = (env, argv) => {
+    const targetDir = "D:/Documents/SiYuan/data/plugins/siyuan-plugin-sidebar-memo/"
     const isPro = argv.mode === "production";
     const plugins = [
         new MiniCssExtractPlugin({
@@ -46,6 +47,10 @@ module.exports = (env, argv) => {
         plugins.push(new CopyPlugin({
             patterns: [
                 {from: "src/i18n/", to: "./i18n/"},
+                {from: "preview.png", to: "./"},
+                {from: "icon.png", to: "./"},
+                {from: "README*.md", to: "./"},
+                {from: "plugin.json", to: "./"},
             ],
         }));
     }
@@ -55,7 +60,7 @@ module.exports = (env, argv) => {
         devtool: isPro ? false : "eval",
         output: {
             filename: "[name].js",
-            path: path.resolve(__dirname),
+            path: targetDir,
             libraryTarget: "commonjs2",
             library: {
                 type: "commonjs2",
