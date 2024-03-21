@@ -7,7 +7,7 @@ const CopyPlugin = require("copy-webpack-plugin");
 const ZipPlugin = require("zip-webpack-plugin");
 
 module.exports = (env, argv) => {
-    const targetDir = "D:/Documents/SiYuan/data/plugins/siyuan-plugin-sidebar-memo/"
+    const targetDir = "D:/Documents/SiYuan/data/plugins/siyuan-plugin-sidebar-memo/";
     const isPro = argv.mode === "production";
     const plugins = [
         new MiniCssExtractPlugin({

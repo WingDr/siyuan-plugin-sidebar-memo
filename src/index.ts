@@ -483,7 +483,7 @@ export default class PluginSidebarMemo extends Plugin {
             memoElement.style.cssText = "padding:8px;margin:8px;border-radius:6px;font-size:80%;box-shadow: rgb(15 15 15 / 10%) 0px 0px 0px 1px, rgb(15 15 15 / 10%) 0px 2px 4px;";
             const content = memo.memo;
             const originText = memo.totalContent;
-            memoElement.innerHTML = `<div data-content-type="number" style="display:inline-block;">${idx+1}</div><div data-content-type="text" style="display:inline-block;font-weight:700;user-select:text;">${originText}</div><div data-content-type="memo" style="margin:8px 0 0 0;word-wrap:break-word;user-select:text;">${content}</div>`;
+            memoElement.innerHTML = `<div data-content-type="number" style="display:inline-block;">${idx+1}</div><div data-content-type="text" style="display:inline-block;font-weight:700;user-select:text;">${originText}</div><div data-content-type="memo" style="margin:8px 0 0 0;word-wrap:break-word;user-select:text;white-space:pre-line">${content}</div>`;
             indexs[node_id].container.insertAdjacentElement("beforeend", memoElement);
         });
         Object.keys(indexs).forEach( id => {
