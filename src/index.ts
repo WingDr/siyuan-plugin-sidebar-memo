@@ -94,11 +94,11 @@ export default class PluginSidebarMemo extends Plugin {
         if (isDev) this.logger.info("找到编辑器, editor =>", this.editorNode);
 
         this.initHandleFunctions();
-        this.openSideBar(this.data[STORAGE_NAME].openSideBarMemo);
+        this.openSideBar(this.data[STORAGE_NAME].openSideBarMemo, true);
     }
 
     onunload() {
-        this.openSideBar(false, false);
+        this.openSideBar(false);
     }
 
 
@@ -138,7 +138,7 @@ export default class PluginSidebarMemo extends Plugin {
                 icon: "iconLayoutBottom",
                 label: this.data[STORAGE_NAME].openSideBarMemo ? this.i18n.closeSidebarMemo : this.i18n.openSidebarMemo,
                 click: () => {
-                    this.openSideBar(!this.data[STORAGE_NAME].openSideBarMemo);
+                    this.openSideBar(!this.data[STORAGE_NAME].openSideBarMemo, true);
                 }
             });
         }
@@ -258,7 +258,7 @@ export default class PluginSidebarMemo extends Plugin {
         };
     }
 
-    private openSideBar(open: boolean, save=true) {
+    private openSideBar(open: boolean, save=false) {
         if (isDev) this.logger.info("open sidebar 触发, open=>", {open});
         if (open) {
             this.memoObservers = {};
