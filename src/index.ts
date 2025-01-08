@@ -94,7 +94,9 @@ export default class PluginSidebarMemo extends Plugin {
         if (isDev) this.logger.info("找到编辑器, editor =>", this.editorNode);
 
         this.initHandleFunctions();
-        this.openSideBar(this.data[STORAGE_NAME].openSideBarMemo, true);
+        setTimeout(() => {
+            this.openSideBar(this.data[STORAGE_NAME].openSideBarMemo, true);
+        }, 5000);
     }
 
     onunload() {
